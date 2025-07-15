@@ -5,17 +5,32 @@ import hashlib
 import json
 import pandas as pd
 import urllib3
+from flask import Flask
+from threading import Thread
 
+# تعطيل تحذيرات SSL
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+# إعدادات API و السوق
 API_KEY = "3538bf2b3821422baebb7918d33ec7ab"
 API_SECRET = "ef2b4b2ec004c96e5c85127e99c10a14a33df9d8fe14a1a52a1095471f03a58c"
 BASE_URL = "https://api.gateio.ws"
 SYMBOL = "PEPE_USDT"
-AMOUNT = "5"
-
+AMOUNT = "5"  # شراء بـ 5 دولار
 position_open = False
 
+# -------------------- سيرفر Flask للحفاظ على تشغيل البوت --------------------
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "✅ Bot is running on Render!"
+
+def run_server():
+    app.run(host='0.0.0.0', port=8080)
+# ---------------------------------------------------------------------------
+
+# توليد التوقيع
 def generate_signature(secret, method, url_path, query_string='', body=''):
     hashed_payload = hashlib.sha512(body.encode('utf-8')).hexdigest()
     timestamp = str(int(time.time()))
@@ -23,6 +38,7 @@ def generate_signature(secret, method, url_path, query_string='', body=''):
     signature = hmac.new(secret.encode(), sign_string.encode(), hashlib.sha512).hexdigest()
     return signature, timestamp
 
+# تنفيذ أمر شراء/بيع
 def place_order(side):
     url_path = "/api/v4/spot/orders"
     url = BASE_URL + url_path
@@ -57,23 +73,22 @@ def place_order(side):
         print(f"❌ فشل في تنفيذ الصفقة ({side}): {result}")
         return False
 
+# جلب رصيد PEPE
 def get_balance():
     url_path = "/api/v4/spot/accounts"
     method = "GET"
-    body = ''
-    signature, timestamp = generate_signature(API_SECRET, method, url_path, '', body)
+    signature, timestamp = generate_signature(API_SECRET, method, url_path)
     headers = {"KEY": API_KEY, "SIGN": signature, "Timestamp": timestamp}
     url = BASE_URL + url_path
     response = requests.get(url, headers=headers, verify=False)
-    accounts = response.json()
-
-    for acc in accounts:
+    for acc in response.json():
         if acc['currency'] == 'PEPE':
             return acc['available']
     return "0"
 
+# جلب بيانات الشموع
 def get_ohlcv():
-    url = f"https://api.gateio.ws/api/v4/spot/candlesticks"
+    url = f"{BASE_URL}/api/v4/spot/candlesticks"
     params = {"currency_pair": SYMBOL, "interval": "5m", "limit": 100}
     response = requests.get(url, params=params, verify=False)
     data = response.json()
@@ -83,11 +98,13 @@ def get_ohlcv():
     df.reset_index(drop=True, inplace=True)
     return df
 
+# استراتيجية تقاطع EMA
 def get_ema_signal(df):
     df["ema10"] = df["close"].ewm(span=10, adjust=False).mean()
     df["ema20"] = df["close"].ewm(span=20, adjust=False).mean()
     last = df.iloc[-1]
     prev = df.iloc[-2]
+
     if prev["ema10"] < prev["ema20"] and last["ema10"] > last["ema20"]:
         return "buy"
     elif prev["ema10"] > prev["ema20"] and last["ema10"] < last["ema20"]:
@@ -95,13 +112,14 @@ def get_ema_signal(df):
     else:
         return "none"
 
+# تشغيل البوت
 def run_bot():
     global position_open
     print("📈 Gate.io EMA Cross Bot (PEPE/USDT) started...\n")
     while True:
         try:
             df = get_ohlcv()
-            if df is None or df.empty:
+            if df.empty:
                 print("❌ لا توجد بيانات شموع.")
                 time.sleep(60)
                 continue
@@ -115,6 +133,7 @@ def run_bot():
                 print("🟢 تنفيذ صفقة شراء...")
                 if place_order("buy"):
                     position_open = True
+
             elif signal == "sell" and position_open:
                 print("🔴 تنفيذ صفقة بيع...")
                 if place_order("sell"):
@@ -125,3 +144,8 @@ def run_bot():
 
         print("⏳ تحديث خلال 7 ثانية...\n")
         time.sleep(7)
+
+# بدء التشغيل
+if __name__ == "__main__":
+    Thread(target=run_server).start()
+    run_bot()
