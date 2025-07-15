@@ -1,4 +1,4 @@
 flask
-pandas
+gunicorn
 requests
-urllib3
+pandas
