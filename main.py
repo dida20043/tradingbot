@@ -25,9 +25,6 @@ app = Flask(__name__)
 @app.route('/')
 def home():
     return "✅ Bot is running on Render!"
-
-def run_server():
-    app.run(host='0.0.0.0', port=8080)
 # ---------------------------------------------------------------------------
 
 # توليد التوقيع
@@ -145,7 +142,5 @@ def run_bot():
         print("⏳ تحديث خلال 7 ثانية...\n")
         time.sleep(7)
 
-# بدء التشغيل
-if __name__ == "__main__":
-    Thread(target=run_server).start()
-    run_bot()
+# 🔁 بدء البوت تلقائيًا عند تشغيل التطبيق حتى مع gunicorn
+Thread(target=run_bot).start()
