@@ -176,19 +176,3 @@ def main():
 if __name__ == "__main__":
     Thread(target=run).start()
     main()
-import requests
-
-
-# ping الرابط الذاتي للبوت كل 5 دقائق
-def keep_alive():
-    while True:
-        try:
-            requests.get(
-                "https://a757dfa5-20d7-4149-a6fe-5a9a5f870f04-00-44kczcxmejmc.worf.replit.dev/"
-            )
-        except:
-            pass
-        time.sleep(300)
-
-
-Thread(target=keep_alive).start()
